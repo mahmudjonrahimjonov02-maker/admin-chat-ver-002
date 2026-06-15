@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Xavfsiz Emoji Admin Chat</title>
+    <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', 'Segoe UI', sans-serif; }
+        body { 
+            background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%); 
+            display: flex; justify-content: center; align-items: center; height: 100vh; color: #f8fafc; overflow: hidden;
+        }
+        .chat-container { 
+            width: 100%; max-width: 500px; height: 88vh; background: rgba(30, 41, 59, 0.7); 
+            backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 24px; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4); 
+            display: flex; flex-direction: column; overflow: hidden; position: relative;
+        }
+
+        /* KIRISH EKRANI */
+        .login-screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #0f172a;
+            display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 20; padding: 30px; transition: 0.5s;
+        }
+        .login-box { text-align: center; width: 100%; max-width: 320px; }
+        .login-box h1 { font-size: 26px; margin-bottom: 10px; background: linear-gradient(90deg, #38bdf8, #818cf8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .login-box p { color: #94a3b8; font-size: 14px; margin-bottom: 25px; }
+        .login-box input { width: 100%; padding: 14px 20px; background: #1e293b; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 14px; color: white; font-size: 16px; outline: none; text-align: center; margin-bottom: 15px; }
+        .login-box button { width: 100%; padding: 14px; background: #4f46e5; color: white; border: none; border-radius: 14px; font-size: 16px; font-weight: 600; cursor: pointer; }
+
+        /* HEADER */
+        .chat-header { background: rgba(15, 23, 42, 0.6); padding: 15px; text-align: center; border-bottom: 1px solid rgba(255, 255, 255, 0.05); position: relative; }
+        .chat-header h2 { font-size: 18px; background: linear-gradient(90deg, #38bdf8, #818cf8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 5px; }
+        .btn-call { position: absolute; right: 15px; top: 15px; background: #22c55e; border: none; color: white; padding: 6px 12px; border-radius: 10px; cursor: pointer; font-weight: bold; font-size: 13px; }
+        .btn-call.active { background: #ef4444; }
+        
+        /* ADMIN BO'LISH TUGMASI */
+        .btn-admin-auth { background: rgba(234, 179, 8, 0.2); border: 1px solid #eab308; color: #eab308; padding: 4px 10px; border-radius: 8px; font-size: 11px; cursor: pointer; font-weight: bold; transition: 0.2s; }
+        .btn-admin-auth:hover { background: #eab308; color: #000; }
+
+        /* JONLI A'ZOLAR RO'YXATI PANELI */
+        .members-panel { background: rgba(15, 23, 42, 0.4); padding: 8px 15px; display: flex; gap: 10px; overflow-x: auto; border-bottom: 1px solid rgba(255, 255, 255, 0.05); align-items: center; }
+        .members-panel span { font-size: 12px; color: #94a3b8; white-space: nowrap; }
+        .member-badge { background: #1e293b; padding: 4px 10px; border-radius: 20px; font-size: 12px; display: flex; align-items: center; gap: 6px; border: 1px solid rgba(255, 255, 255, 0.05); }
+        .btn-kick { background: #ef4444; border: none; color: white; font-size: 10px; padding: 2px 6px; border-radius: 4px; cursor: pointer; font-weight: bold; }
+
+        /* VIDEO CALL PANEL */
+        .video-grid { display: none; grid-template-columns: repeat(2, 1fr); gap: 8px; padding: 10px; background: #0f172a; border-bottom: 1px solid rgba(255, 255, 255, 0.1); }
+        .video-box { position: relative; background: #1e293b; border-radius: 10px; overflow: hidden; height: 110px; }
+        .video-box video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+        .video-box span { position: absolute; bottom: 5px; left: 5px; background: rgba(0,0,0,0.6); padding: 2px 6px; border-radius: 4px; font-size: 10px; }
+
+        /* CHAT BOG'LANISH AREA */
+        .connect-area { background: rgba(15, 23, 42, 0.3); padding: 10px; display: flex; gap: 8px; border-bottom: 1px solid rgba(255, 255, 255, 0.05); }
+        .connect-area input { flex: 1; padding: 10px 15px; background: #0f172a; border: 1px solid rgba(255, 255, 255, 0.1); color: #fff; border-radius: 10px; outline: none; font-size: 14px; }
+        .connect-area button { background: #4f46e5; color: white; border: none; padding: 0 15px; border-radius: 10px; cursor: pointer; font-size: 13px; }
+        
+        /* CHAT OYNASI */
+        .chat-messages { flex: 1; padding: 15px; background: rgba(15, 23, 42, 0.2); overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+        .message { max-width: 75%; padding: 10px 14px; border-radius: 14px; font-size: 14px; line-height: 1.4; word-wrap: break-word; }
+        .message .sender-tag { font-size: 11px; font-weight: 700; color: #38bdf8; display: block; margin-bottom: 2px; }
+        .message.incoming { background: #334155; align-self: flex-start; border-top-left-radius: 4px; }
+        .message.outgoing { background: #4f46e5; align-self: flex-end; border-top-right-radius: 4px; }
+        .message.system { background: rgba(30, 41, 59, 0.8); color: #94a3b8; align-self: center; font-size: 12px; border-radius: 8px; padding: 4px 12px; text-align: center; }
+        .message img { max-width: 100%; border-radius: 8px; margin-top: 4px; display: block; max-height: 200px; object-fit: cover; }
+
+        .typing-indicator { align-self: flex-start; background: #1e293b; color: #94a3b8; font-size: 12px; font-style: italic; padding: 6px 12px; border-radius: 10px; display: none; }
+
+        /* INPUT AREA */
+        .chat-input-area { background: rgba(15, 23, 42, 0.6); padding: 12px; display: flex; gap: 8px; align-items: center; border-top: 1px solid rgba(255, 255, 255, 0.05); }
+        .chat-input-area input[type="text"] { flex: 1; padding: 12px 16px; background: #0f172a; border: 1px solid rgba(255, 255, 255, 0.1); color: white; border-radius: 12px; outline: none; }
+        .btn-action { background: #1e293b; color: white; border: none; width: 42px; height: 42px; border-radius: 12px; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; }
+        .btn-camera { background: #0ea5e9; }
+        .btn-file { background: #8b5cf6; }
+        .btn-send { background: #4f46e5; width: 45px; height: 45px; font-size: 16px; }
+
+        /* KAMERA MODAL */
+        .camera-modal { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #0f172a; display: none; flex-direction: column; justify-content: center; align-items: center; z-index: 10; }
+        .camera-modal video { width: 85%; max-height: 55%; border-radius: 16px; transform: scaleX(-1); background: #000; }
+        .camera-controls { display: flex; gap: 15px; margin-top: 20px; }
+        .btn-snap { background: #ef4444; padding: 10px 20px; border-radius: 20px; border: none; color: white; font-weight: bold; cursor: pointer; }
+        .btn-close-cam { background: #64748b; padding: 10px 20px; border-radius: 20px; border: none; color: white; font-weight: bold; cursor: pointer; }
+
+        ::-webkit-scrollbar { height: 4px; width: 4px; }
+        ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 10px; }
+    </style>
+</head>
+<body>
+
+<div class="chat-container">
+    
+    <div class="login-screen" id="loginScreen">
+        <div class="login-box">
+            <h1>Xavfsiz Emoji Chat 🚀</h1>
+            <p>Hech qanday parolsiz, shunchaki ismingizni yozib kiring</p>
+            <input type="text" id="usernameInput" placeholder="Ismingiz..." maxlength="15">
+            <button onclick="startChat()">Kirish</button>
+        </div>
+    </div>
+
+    <div class="chat-header">
+        <h2>🔒 Jonli Guruh Chat</h2>
+        <div style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 5px;">
+            <p style="font-size:11px; color:#94a3b8;">Siz: <span id="myIdDisplay" style="color:#38bdf8; font-weight:bold;">---</span></p>
+            <button class="btn-admin-auth" id="adminAuthBtn" onclick="tryToBecomeAdmin()">👑 Admin bo'lish</button>
+        </div>
+        <button class="btn-call" id="callBtn" onclick="toggleVideoCall()">📹 Viziv</button>
+    </div>
+
+    <div class="members-panel" id="membersPanel">
+        <span>Guruh a'zolari:</span>
+        <div class="member-badge" id="myBadge" style="color: #fff;">Siz</div>
+    </div>
+
+    <div class="video-grid" id="videoGrid">
+        <div class="video-box">
+            <video id="localVideo" autoplay playsinline muted></video>
+            <span>Siz</span>
+        </div>
+    </div>
+
+    <div class="connect-area">
+        <input type="text" id="friendIdInput" placeholder="Do'stingizni ismini yozib guruhga qo'shing...">
+        <button onclick="connectToFriend()">Ulanish</button>
+    </div>
+
+    <div class="chat-messages" id="chatMessages">
+        <div class="message system">Kutilmoqda...</div>
+    </div>
+
+    <div class="typing-indicator" id="typingIndicator">...</div>
+
+    <div class="chat-input-area">
+        <button class="btn-action btn-camera" onclick="openCamera()" title="Kameradan rasm">📷</button>
+        <button class="btn-action btn-file" onclick="triggerFileInput()" title="Tayyor rasm yuborish">📁</button>
+        <input type="file" id="fileInput" accept="image/*" style="display:none;" onchange="handleFileSelect(event)">
+        
+        <input type="text" id="messageInput" placeholder="Xabar yozing..." onkeypress="checkEnter(event)" oninput="notifyTyping()">
+        <button class="btn-action btn-send" onclick="sendMessage()">➔</button>
+    </div>
+
+    <div class="camera-modal" id="cameraModal">
+        <video id="video" autoplay playsinline></video>
+        <div class="camera-controls">
+            <button class="btn-close-cam" onclick="closeCamera()">Yopish</button>
+            <button class="btn-snap" onclick="takeSnapshot()">📸 Rasmga olish</button>
+        </div>
+        <canvas id="canvas" style="display:none;"></canvas>
+    </div>
+</div>
+
+<script>
+    let myName = "";
+    let connections = []; 
+    let peer = null;
+    let localStream = null;
+    let callStream = null;
+    let isVideoCallActive = false;
+    let typingTimeout = null;
+    let amIAdmin = false; 
+
+    function startChat() {
+        const input = document.getElementById('usernameInput').value.trim();
+        if (!input) return alert("Iltimos, ism kiriting!");
+        myName = input.replace(/\s+/g, '').toLowerCase();
+        document.getElementById('myIdDisplay').innerText = myName;
+        document.getElementById('loginScreen').style.display = 'none';
+        initPeer();
+    }
+
+    function initPeer() {
+        document.getElementById('chatMessages').innerHTML = `<div class="message system">Xavfsiz tarmoqqa ulanmoqda...</div>`;
+        peer = new Peer(myName);
+
+        peer.on('open', () => {
+            document.getElementById('chatMessages').innerHTML = `<div class="message system">Siz qo'shildingiz, <b>${myName}</b>. Guruhni boshqarish uchun maxfiy emojini kiriting va Admin bo'ling!</div>`;
+        });
+
+        peer.on('connection', (conn) => { setupConnection(conn); });
+
+        peer.on('call', (call) => {
+            if(!callStream) {
+                navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then(stream => {
+                    callStream = stream;
+                    document.getElementById('videoGrid').style.display = 'grid';
+                    document.getElementById('localVideo').srcObject = stream;
+                    call.answer(stream);
+                    handleIncomingCallStream(call);
+                });
+            } else {
+                call.answer(callStream);
+                handleIncomingCallStream(call);
+            }
+        });
+    }
+
+    // CHAT ICHIDA ADMIN BO'LISH (PAROL ENEDI: 👑)
+    function tryToBecomeAdmin() {
+        if(amIAdmin) return alert("Siz allaqachon Adminsiz! 👑");
+        const enteredPassword = prompt("Adminlik maxfiy emoji parolini kiriting:");
+        
+        // Bu yerda parol aynan "👑" belgisiga tekshiriladi
+        if (enteredPassword === "👑") {
+            amIAdmin = true;
+            alert("Tabriklaymiz! Maxfiy emoji to'g'ri. Siz Admin bo'ldingiz! 👑");
+            document.getElementById('adminAuthBtn').innerText = "👑 Siz Adminsiz";
+            document.getElementById('adminAuthBtn').style.background = "#eab308";
+            document.getElementById('adminAuthBtn').style.color = "#000";
+            document.getElementById('myBadge').style.color = "#eab308";
+            document.getElementById('myBadge').innerText = "Siz (Admin)";
+            updateMembersList(); 
+        } else {
+            alert("Xato emoji! Adminlik huquqi berilmadi, chatda oddiy foydalanuvchi bo'lib qolaverasiz. ❌");
+        }
+    }
+
+    function connectToFriend() {
+        const friendName = document.getElementById('friendIdInput').value.trim().toLowerCase().replace(/\s+/g, '');
+        if (!friendName || friendName === myName) return alert("Ism xato!");
+        if (connections.some(c => c.peer === friendName)) return alert("Bu do'stingiz bilan aloqa bor.");
+        
+        showSystemMessage(`<b>${friendName}</b> qidirilmoqda...`);
+        const conn = peer.connect(friendName);
+        setupConnection(conn);
+        document.getElementById('friendIdInput').value = '';
+    }
+
+    function setupConnection(conn) {
+        conn.on('open', () => {
+            connections.push(conn);
+            showSystemMessage(`⚡ <b>${conn.peer}</b> guruhga kirdi.`);
+            updateMembersList();
+
+            if(isVideoCallActive && callStream) {
+                peer.call(conn.peer, callStream);
+            }
+        });
+
+        conn.on('data', (data) => {
+            if (data.type === 'image') {
+                appendImageMessage(data.senderName, data.imageSrc, 'incoming');
+            } else if (data.type === 'typing') {
+                showTypingStatus(data.senderName);
+            } else if (data.type === 'kick') {
+                alert("Siz guruh admini tomonidan guruhdan chiqarildingiz! ❌");
+                location.reload(); 
+            } else {
+                hideTypingStatus();
+                appendMessage(data.senderName, data.text, 'incoming');
+            }
+        });
+
+        conn.on('close', () => {
+            showSystemMessage(`❌ <b>${conn.peer}</b> chiqdi.`);
+            connections = connections.filter(c => c.peer !== conn.peer);
+            removeFriendVideo(conn.peer);
+            updateMembersList();
+        });
+    }
+
+    // ADMIN TOMONIDAN HAYDASH (KICK)
+    function kickMember(memberName) {
+        const target = connections.find(c => c.peer === memberName);
+        if (target) {
+            target.send({ type: 'kick' });
+            setTimeout(() => {
+                target.close();
+                connections = connections.filter(c => c.peer !== memberName);
+                showSystemMessage(`🚫 Admin <b>${memberName}</b>ni guruhdan haydadi!`);
+                removeFriendVideo(memberName);
+                updateMembersList();
+            }, 500);
+        }
+    }
+
+    // A'ZOLAR RO'YXATINI YANGILASH
+    function updateMembersList() {
+        const panel = document.getElementById('membersPanel');
+        const myText = amIAdmin ? "Siz (Admin)" : "Siz";
+        const myColor = amIAdmin ? "#eab308" : "#fff";
+        
+        panel.innerHTML = `<span>Guruh a'zolari:</span> <div class="member-badge" id="myBadge" style="color: ${myColor};">${myText}</div>`;
+        
+        connections.forEach(c => {
+            const name = c.peer;
+            const badge = document.createElement('div');
+            badge.classList.add('member-badge');
+            badge.innerText = name;
+
+            if (amIAdmin) {
+                const kickBtn = document.createElement('button');
+                kickBtn.classList.add('btn-kick');
+                kickBtn.innerText = "Haydash";
+                kickBtn.onclick = () => kickMember(name);
+                badge.appendChild(kickBtn);
+            }
+            panel.appendChild(badge);
+        });
+    }
+
+    // VIDEO VIZIV
+    function toggleVideoCall() {
+        const btn = document.getElementById('callBtn');
+        const grid = document.getElementById('videoGrid');
+
+        if (!isVideoCallActive) {
+            navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+                .then(stream => {
+                    callStream = stream; isVideoCallActive = true;
+                    btn.innerText = "❌ Tugatish"; btn.classList.add('active'); grid.style.display = 'grid';
+                    document.getElementById('localVideo').srcObject = stream;
+
+                    connections.forEach(c => {
+                        const call = peer.call(c.peer, stream);
+                        handleIncomingCallStream(call);
+                    });
+                }).catch(() => alert("Kameraga ruxsat berilmadi!"));
+        } else {
+            isVideoCallActive = false; btn.innerText = "📹 Viziv"; btn.classList.remove('active'); grid.style.display = 'none';
+            if (callStream) { callStream.getTracks().forEach(t => t.stop()); callStream = null; }
+            grid.querySelectorAll('.friend-video-box').forEach(box => box.remove());
+        }
+    }
+
+    function handleIncomingCallStream(call) {
+        call.on('stream', (remoteStream) => {
+            const friendName = call.peer;
+            if (document.getElementById(`vid-${friendName}`)) return;
+
+            const grid = document.getElementById('videoGrid');
+            const box = document.createElement('div');
+            box.classList.add('video-box', 'friend-video-box'); box.id = `vid-${friendName}`;
+            
+            const videoElement = document.createElement('video');
+            videoElement.autoplay = true; videoElement.playsInline = true; videoElement.srcObject = remoteStream;
+
+            const nameTag = document.createElement('span'); nameTag.innerText = friendName;
+
+            box.appendChild(videoElement); box.appendChild(nameTag); grid.appendChild(box);
+        });
+    }
+
+    function removeFriendVideo(name) {
+        const vidBox = document.getElementById(`vid-${name}`); if(vidBox) vidBox.remove();
+    }
+
+    // TAYYOR RASM JONATISH (FILE)
+    function triggerFileInput() { document.getElementById('fileInput').click(); }
+    function handleFileSelect(event) {
+        const file = event.target.files[0]; if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const base64Img = e.target.result;
+            appendImageMessage('Siz', base64Img, 'outgoing');
+            sendToAll({ type: 'image', senderName: myName, imageSrc: base64Img });
+        };
+        reader.readAsDataURL(file);
+    }
+
+    // MATN XABARLARI VA YOZMOQDA INDIKATORI
+    function sendMessage() {
+        const input = document.getElementById('messageInput'); const text = input.value.trim(); if (text === "") return;
+        appendMessage('Siz', text, 'outgoing'); input.value = '';
+        sendToAll({ type: 'text', senderName: myName, text: text });
+    }
+
+    function notifyTyping() { sendToAll({ type: 'typing', senderName: myName }); }
+    function showTypingStatus(name) {
+        const ind = document.getElementById('typingIndicator'); ind.innerText = `${name} yozmoqda...`; ind.style.display = 'block';
+        clearTimeout(typingTimeout); typingTimeout = setTimeout(() => ind.style.display = 'none', 2000);
+    }
+    function hideTypingStatus() { document.getElementById('typingIndicator').style.display = 'none'; }
+    function sendToAll(dataObj) { connections.forEach(c => { if (c.open) c.send(dataObj); }); }
+
+    // KAMERADAN MOMENTALNYY FOTO
+    function openCamera() {
+        const modal = document.getElementById('cameraModal'); modal.style.display = 'flex';
+        navigator.mediaDevices.getUserMedia({ video: { width: 400, height: 400 } })
+            .then(stream => { localStream = stream; document.getElementById('video').srcObject = stream; })
+            .catch(() => { alert("Kamera xatosi."); closeCamera(); });
+    }
+    function closeCamera() { document.getElementById('cameraModal').style.display = 'none'; if (localStream) localStream.getTracks().forEach(t => t.stop()); }
+    function takeSnapshot() {
+        const video = document.getElementById('video'); const canvas = document.getElementById('canvas');
+        canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+        const ctx = canvas.getContext('2d'); ctx.translate(canvas.width, 0); ctx.scale(-1, 1); ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
+        appendImageMessage('Siz', dataUrl, 'outgoing'); sendToAll({ type: 'image', senderName: myName, imageSrc: dataUrl });
+        closeCamera();
+    }
+
+    // EKRANGA CHIQARISH FUNKSIYALARI
+    function appendMessage(sender, text, type) {
+        const chatMessages = document.getElementById('chatMessages'); const messageDiv = document.createElement('div');
+        messageDiv.classList.add('message', type); messageDiv.innerHTML = type === 'incoming' ? `<span class="sender-tag">${sender}</span>${text}` : text;
+        chatMessages.appendChild(messageDiv); chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+    function appendImageMessage(sender, imgSrc, type) {
+        const chatMessages = document.getElementById('chatMessages'); const messageDiv = document.createElement('div');
+        messageDiv.classList.add('message', type);
+        messageDiv.innerHTML = type === 'incoming' ? `<span class="sender-tag">${sender}</span><img src="${imgSrc}"/>` : `<img src="${imgSrc}"/>`;
+        chatMessages.appendChild(messageDiv); messageDiv.querySelector('img').onload = () => { chatMessages.scrollTop = chatMessages.scrollHeight; };
+    }
+    function showSystemMessage(text) {
+        const chatMessages = document.getElementById('chatMessages'); const msgDiv = document.createElement('div'); msgDiv.classList.add('message', 'system');
+        msgDiv.innerHTML = text; chatMessages.appendChild(msgDiv); chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+    function checkEnter(event) { if (event.key === "Enter") sendMessage(); }
+</script>
+</body>
+</html>
